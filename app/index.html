@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research Dossier — query-driven briefs</title>
+<meta name="description" content="Type any topic or head-to-head comparison. The backend retrieves sources and returns a structured report the page renders.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --paper: #f6f3ec;
+    --surface: #fffdf8;
+    --ink: #14181f;
+    --muted: #5b6270;
+    --line: #ddd6c8;
+    --line-strong: #c7bfae;
+    --serper: #0e7c6b;
+    --serper-soft: #e0f1ec;
+    --tavily: #4f46c8;
+    --tavily-soft: #e9e7fb;
+    --warn: #b45309;
+    --warn-soft: #fbeedd;
+    --radius: 18px;
+    --shadow: 0 1px 0 rgba(20, 24, 31, .04), 0 18px 40px -26px rgba(20, 24, 31, .45);
+    --font-display: "Space Grotesk", system-ui, sans-serif;
+    --font-body: "Source Serif 4", Georgia, "Times New Roman", serif;
+    --font-mono: "JetBrains Mono", "Consolas", monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    background:
+      radial-gradient(1100px 560px at 82% -12%, #efe9dc 0%, rgba(239, 233, 220, 0) 62%),
+      var(--paper);
+    font-family: var(--font-body);
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(20, 24, 31, .035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(20, 24, 31, .035) 1px, transparent 1px);
+    background-size: 32px 32px;
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, .75), transparent 72%);
+    mask-image: linear-gradient(to bottom, rgba(0, 0, 0, .75), transparent 72%);
+  }
+  a { color: inherit; }
+  .wrap { position: relative; z-index: 1; width: min(1120px, 92vw); margin: 0 auto; }
+  [hidden] { display: none !important; }
+
+  /* top bar */
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    border-bottom: 1px solid var(--line);
+    background: rgba(246, 243, 236, .84);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+  }
+  .topbar .wrap { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 13px 0; }
+  .brand { display: flex; align-items: center; gap: 11px; font-family: var(--font-display); font-weight: 700; letter-spacing: -.02em; font-size: 16px; }
+  .brand svg { width: 28px; height: 28px; flex: none; }
+  .brand small { display: block; font-family: var(--font-mono); font-size: 9px; letter-spacing: .16em; color: var(--muted); font-weight: 500; text-transform: uppercase; }
+  .nav { display: flex; gap: 20px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+  .nav a { color: var(--muted); text-decoration: none; }
+  .nav a:hover { color: var(--ink); }
+  .status {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px;
+    background: var(--surface); font-family: var(--font-mono); font-size: 10.5px;
+    letter-spacing: .04em; white-space: nowrap;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #c2410c; flex: none; }
+  .dot.ok { background: var(--serper); box-shadow: 0 0 0 4px rgba(14, 124, 107, .16); }
+
+  /* hero + search */
+  .hero { padding: 54px 0 34px; }
+  .eyebrow { display: flex; align-items: center; gap: 12px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+  .eyebrow::before { content: ""; width: 34px; height: 1px; background: var(--ink); }
+  h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(38px, 6.4vw, 78px); line-height: .96; letter-spacing: -.045em; margin: 18px 0 18px; }
+  h1 .accent-a { color: var(--serper); }
+  h1 .accent-b { color: var(--tavily); }
+  h1 .vs { font-family: var(--font-body); font-style: italic; font-weight: 400; color: var(--muted); }
+  .standfirst { max-width: 66ch; margin: 0; font-size: clamp(16.5px, 1.9vw, 20px); color: #2a2f39; }
+  .standfirst strong { font-weight: 600; }
+
+  .search { display: flex; gap: 10px; margin: 26px 0 12px; max-width: 780px; }
+  .search input {
+    flex: 1; min-width: 0;
+    font-family: var(--font-body); font-size: 17px; color: var(--ink);
+    background: var(--surface); border: 1px solid var(--line-strong); border-radius: 999px;
+    padding: 15px 20px; outline: none; transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .search input:focus { border-color: var(--tavily); box-shadow: 0 0 0 4px rgba(79, 70, 200, .12); }
+  .search button {
+    flex: none; border: 0; border-radius: 999px; padding: 0 24px;
+    background: var(--ink); color: #fff; font-family: var(--font-mono); font-size: 12px;
+    letter-spacing: .06em; text-transform: uppercase; cursor: pointer;
+    transition: transform .15s ease, opacity .15s ease;
+  }
+  .search button:hover { transform: translateY(-1px); }
+  .search button:disabled { opacity: .55; cursor: progress; transform: none; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 0; }
+  .chip {
+    border: 1px solid var(--line); background: var(--surface); color: var(--muted);
+    border-radius: 999px; padding: 7px 13px; font-family: var(--font-mono); font-size: 10.5px;
+    letter-spacing: .04em; cursor: pointer; transition: color .15s ease, border-color .15s ease;
+  }
+  .chip:hover { color: var(--ink); border-color: var(--line-strong); }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin: 30px 0 0; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 18px 16px; }
+  .stat b { display: block; font-family: var(--font-display); font-size: clamp(23px, 2.8vw, 32px); letter-spacing: -.03em; line-height: 1; }
+  .stat span { display: block; margin-top: 8px; font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .meta { margin: 14px 0 0; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .05em; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+  .pill { padding: 4px 9px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); }
+  .pill.live { color: var(--serper); border-color: #b9ddd5; background: var(--serper-soft); }
+  .pill.curated { color: var(--tavily); border-color: #cfcaf5; background: var(--tavily-soft); }
+  .pill.offline { color: var(--warn); border-color: #efd3ae; background: var(--warn-soft); }
+
+  /* welcome strip */
+  .welcome { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 30px 0 0; }
+  .step { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; box-shadow: var(--shadow); }
+  .step .n { font-family: var(--font-mono); font-size: 10px; letter-spacing: .14em; color: var(--muted); }
+  .step h3 { font-family: var(--font-display); font-size: 17px; letter-spacing: -.02em; margin: 8px 0 6px; }
+  .step p { margin: 0; font-size: 14.5px; color: var(--muted); }
+
+  /* report sections */
+  section.block { padding: 54px 0; border-top: 1px solid var(--line); }
+  .sec-head { display: grid; grid-template-columns: auto 1fr; gap: 22px; align-items: start; margin-bottom: 26px; }
+  .sec-num { font-family: var(--font-display); font-weight: 700; font-size: clamp(42px, 6vw, 70px); line-height: .8; color: transparent; -webkit-text-stroke: 1.5px var(--line-strong); }
+  .sec-head h2 { font-family: var(--font-display); font-size: clamp(25px, 3.2vw, 38px); letter-spacing: -.03em; line-height: 1.05; margin: 0 0 6px; }
+  .sec-head p { margin: 0; max-width: 66ch; color: var(--muted); }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px; box-shadow: var(--shadow); }
+  .panel.serper { border-top: 4px solid var(--serper); }
+  .panel.tavily { border-top: 4px solid var(--tavily); }
+  .tag { display: inline-block; padding: 5px 10px; border-radius: 999px; font-family: var(--font-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; }
+  .tag.serper { background: var(--serper-soft); color: var(--serper); }
+  .tag.tavily { background: var(--tavily-soft); color: var(--tavily); }
+  .panel h3 { font-family: var(--font-display); font-size: 22px; letter-spacing: -.02em; margin: 13px 0 6px; }
+  .panel .lede { margin: 0 0 15px; color: var(--muted); }
+  .checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .checks li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; font-size: 15.5px; line-height: 1.45; }
+  .checks li::before { content: "✓"; font-weight: 700; line-height: 1.3; }
+  .serper .checks li::before { color: var(--serper); }
+  .tavily .checks li::before { color: var(--tavily); }
+
+  /* tables */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; min-width: 560px; }
+  th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #faf7f0; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  tbody tr:nth-child(even) { background: #fbf9f3; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.row-label { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+  .table-caption { margin: 10px 2px 0; font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; color: var(--muted); }
+
+  /* chart */
+  figure.chart { margin: 18px 0 0; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; box-shadow: var(--shadow); }
+  figure.chart svg { display: block; width: 100%; height: auto; }
+  figcaption { margin-top: 10px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; color: var(--muted); }
+
+  /* calculator */
+  .calc { display: grid; grid-template-columns: 1.05fr .95fr; gap: 18px; margin-top: 18px; }
+  .calc-form { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 22px; box-shadow: var(--shadow); }
+  .calc-form label { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .calc-form output { font-family: var(--font-display); font-size: 22px; font-weight: 700; letter-spacing: -.02em; color: var(--ink); }
+  input[type="range"] { width: 100%; margin: 18px 0 14px; accent-color: var(--tavily); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 999px; padding: 12px 20px; background: var(--ink); color: #fff; font-family: var(--font-mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; transition: transform .15s ease, opacity .15s ease; }
+  .btn:hover { transform: translateY(-1px); }
+  .calc-result { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 22px; box-shadow: var(--shadow); }
+  .calc-placeholder { margin: 0; color: var(--muted); font-size: 15px; }
+  .calc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .calc-card { border-radius: 12px; padding: 14px; border: 1px solid var(--line); }
+  .calc-card span { display: block; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .calc-card b { font-family: var(--font-display); font-size: 22px; letter-spacing: -.02em; }
+  .calc-card.serper { background: var(--serper-soft); border-color: transparent; }
+  .calc-card.serper b { color: var(--serper); }
+  .calc-card.tavily { background: var(--tavily-soft); border-color: transparent; }
+  .calc-card.tavily b { color: var(--tavily); }
+  .calc-card.gap b { color: var(--ink); }
+  .calc-note { margin: 12px 0 0; font-size: 12.5px; color: var(--muted); }
+  .calc-error { margin: 0; color: #b3261e; font-size: 14px; }
+
+  /* picks */
+  .pick { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 8px; }
+  .pick .k { font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .pick h4 { font-family: var(--font-display); font-size: 18px; letter-spacing: -.02em; margin: 0; line-height: 1.2; }
+  .pick p { margin: 0; font-size: 14.5px; color: #3a404b; }
+  .pick.serper { border-left: 3px solid var(--serper); }
+  .pick.tavily { border-left: 3px solid var(--tavily); }
+
+  /* warnings */
+  .warn { background: var(--warn-soft); border: 1px solid #efd3ae; border-left: 4px solid var(--warn); border-radius: 14px; padding: 20px; }
+  .warn h4 { font-family: var(--font-display); font-size: 16px; margin: 0 0 6px; letter-spacing: -.01em; }
+  .warn p { margin: 0; font-size: 14.5px; color: #6b4a1f; }
+
+  /* prose + sources */
+  .prose h3 { font-family: var(--font-display); font-size: 20px; letter-spacing: -.02em; margin: 26px 0 8px; }
+  .prose h3:first-child { margin-top: 0; }
+  .prose p { margin: 0 0 12px; max-width: 74ch; }
+  .prose strong { font-weight: 600; }
+  .sources { display: grid; gap: 10px; }
+  .source { display: grid; grid-template-columns: 28px 1fr; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; text-decoration: none; transition: border-color .15s ease; }
+  .source:hover { border-color: var(--line-strong); }
+  .source .idx { font-family: var(--font-mono); font-size: 11px; color: var(--muted); padding-top: 2px; }
+  .source b { font-family: var(--font-display); font-size: 15.5px; letter-spacing: -.01em; display: block; }
+  .source span { display: block; font-size: 13.5px; color: var(--muted); margin-top: 3px; }
+  .source .url { font-family: var(--font-mono); font-size: 10.5px; color: var(--tavily); margin-top: 5px; word-break: break-all; }
+  .disclaimer { margin: 26px 0 0; padding: 16px 18px; border: 1px dashed var(--line-strong); border-radius: 14px; font-size: 13.5px; color: var(--muted); background: rgba(255, 253, 248, .6); }
+
+  /* loading / error */
+  .loading { display: grid; gap: 14px; margin-top: 28px; }
+  .sk { height: 18px; border-radius: 6px; background: linear-gradient(90deg, #e9e3d6 25%, #f4efe5 37%, #e9e3d6 63%); background-size: 400% 100%; animation: shimmer 1.3s ease infinite; }
+  .sk.w60 { width: 60%; } .sk.w40 { width: 40%; } .sk.tall { height: 120px; border-radius: 14px; }
+  @keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+  .error { margin-top: 26px; padding: 18px 20px; border: 1px solid #e6b8b3; background: #fbeceb; color: #8a1f18; border-radius: 14px; font-size: 15px; }
+
+  /* footer */
+  footer { padding: 42px 0 60px; border-top: 1px solid var(--line); margin-top: 8px; }
+  .foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; color: var(--muted); }
+  .foot a { text-decoration: none; border-bottom: 1px solid var(--line-strong); }
+  .foot a:hover { color: var(--ink); }
+
+  /* responsive */
+  @media (max-width: 860px) {
+    .stats { grid-template-columns: 1fr 1fr; }
+    .welcome, .grid-2, .grid-4, .calc { grid-template-columns: 1fr; }
+    .nav { display: none; }
+    .sec-head { grid-template-columns: 1fr; gap: 4px; }
+    .sec-num { font-size: 40px; }
+    .calc-grid { grid-template-columns: 1fr; }
+    .search { flex-direction: column; }
+    .search button { padding: 14px 20px; }
+  }
+  @media (max-width: 520px) {
+    .stats { grid-template-columns: 1fr; }
+    .brand small { display: none; }
+    .status { font-size: 9px; padding: 6px 9px; }
+  }
+
+  /* print */
+  @page { size: A4; margin: 16mm 15mm; }
+  @media print {
+    body { background: #fff; font-size: 10.5pt; }
+    body::before, .topbar, .calc, .status, .nav, .search, .chips, .welcome { display: none !important; }
+    .hero { padding: 0 0 18px; }
+    section.block { padding: 24px 0; }
+    .panel, .pick, .warn, .table-wrap, figure.chart, .source { box-shadow: none; break-inside: avoid; page-break-inside: avoid; }
+    .sec-head h2 { break-after: avoid; }
+    h1 { font-size: 38pt; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <circle cx="13" cy="13" r="8.5" fill="none" stroke="#14181f" stroke-width="2.2"/>
+        <path d="M19.5 19.5 L27 27" stroke="#14181f" stroke-width="2.6" stroke-linecap="round"/>
+        <path d="M13 5.5 v15" stroke="#0e7c6b" stroke-width="2.2"/>
+        <path d="M5.5 13 h15" stroke="#4f46c8" stroke-width="2.2"/>
+      </svg>
+      <div>Research Dossier<small>query-driven briefs</small></div>
+    </div>
+    <nav class="nav" aria-label="Page">
+      <a href="#search">New search</a>
+      <a href="#how">How it works</a>
+    </nav>
+    <div class="status" id="status" role="status" aria-live="polite">
+      <span class="dot" id="status-dot"></span>
+      <span id="status-text">connecting…</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="hero" id="search">
+    <div class="eyebrow">Query-driven research · 2026</div>
+    <h1 id="report-title">What do you want to research?</h1>
+    <p class="standfirst" id="report-summary">
+      Type any topic or a head-to-head comparison. The backend retrieves sources and returns a
+      structured brief — cards, tables, charts and citations — that this page renders.
+    </p>
+
+    <form class="search" id="search-form" role="search">
+      <input id="query" name="query" type="search" placeholder="e.g. Serper vs Tavily · retrieval-augmented generation · vector databases" autocomplete="off" aria-label="Research query">
+      <button type="submit" id="search-btn">Research →</button>
+    </form>
+
+    <div class="chips" id="chips" aria-label="Example queries">
+      <button class="chip" type="button">Serper vs Tavily</button>
+      <button class="chip" type="button">Retrieval-augmented generation</button>
+      <button class="chip" type="button">Python vs JavaScript</button>
+      <button class="chip" type="button">Vector database</button>
+      <button class="chip" type="button">Model Context Protocol</button>
+    </div>
+
+    <div class="stats" id="stats" hidden></div>
+    <div class="meta" id="meta" hidden></div>
+
+    <div class="welcome" id="welcome">
+      <div class="step"><div class="n">01 / QUERY</div><h3>Ask anything</h3><p>One topic, or two things compared with “vs”. No topic is baked into the page.</p></div>
+      <div class="step"><div class="n">02 / RETRIEVE</div><h3>Backend gathers sources</h3><p>A curated corpus is checked first, then live Tavily or Wikipedia retrieval.</p></div>
+      <div class="step"><div class="n">03 / RENDER</div><h3>Structured JSON → page</h3><p>The API returns typed fields; the frontend renders cards, tables, charts and citations.</p></div>
+    </div>
+  </section>
+
+  <div id="report"></div>
+
+  <section class="block" id="how">
+    <div class="sec-head">
+      <div class="sec-num">i</div>
+      <div>
+        <h2>How the binding works</h2>
+        <p>One contract between the Python backend and this page.</p>
+      </div>
+    </div>
+    <div class="prose">
+      <p><strong>Request.</strong> The search box sends <code>POST /api/research</code> with <code>{"query": "…"}</code>. A shareable <code>GET /api/research?q=…</code> form is also available.</p>
+      <p><strong>Response.</strong> The backend returns a single JSON object with optional blocks: <code>title</code>, <code>summary</code>, <code>stats</code>, <code>cards</code>, <code>table</code>, <code>chart</code>, <code>calculator</code>, <code>picks</code>, <code>warnings</code>, <code>sections</code>, <code>sources</code> and <code>disclaimer</code>.</p>
+      <p><strong>Rendering.</strong> Each block is optional. The frontend shows only what is present, numbers the sections in order, and links every source. Adding a new topic needs no frontend change — only a new corpus entry or a working retrieval source.</p>
+    </div>
+  </section>
+
+  <footer>
+    <div class="foot">
+      <div>Research Dossier · backend-driven structured reports</div>
+      <div><a href="/api/health">/api/health</a> · <a href="/api/research?q=Serper%20vs%20Tavily">/api/research</a></div>
+    </div>
+  </footer>
+
+</main>
+
+<script>
+  const PALETTE = {
+    a: "#0e7c6b",
+    b: "#4f46c8",
+    ink: "#14181f",
+    muted: "#5b6270",
+    grid: "#e3ddcf"
+  };
+
+  const reportEl = document.getElementById("report");
+  const titleEl = document.getElementById("report-title");
+  const summaryEl = document.getElementById("report-summary");
+  const statsEl = document.getElementById("stats");
+  const metaEl = document.getElementById("meta");
+  const welcomeEl = document.getElementById("welcome");
+  const form = document.getElementById("search-form");
+  const input = document.getElementById("query");
+  const button = document.getElementById("search-btn");
+
+  let sectionNo = 0;
+
+  function escapeHtml(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, c => (
+      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+    ));
+  }
+
+  function renderTitle(text) {
+    const value = String(text || "");
+    const match = value.match(/^(.*?)\s+vs\.?\s+(.*)$/i);
+    if (match) {
+      return `<span class="accent-a">${escapeHtml(match[1])}</span> <span class="vs">vs</span> <span class="accent-b">${escapeHtml(match[2])}</span>`;
+    }
+    return escapeHtml(value);
+  }
+
+  function formatBody(text) {
+    let out = escapeHtml(text);
+    out = out.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    return out.split(/\n{2,}/).map(p => `<p>${p.replace(/\n/g, "<br>")}</p>`).join("");
+  }
+
+  function toneClass(tone) { return tone === "b" ? "tavily" : "serper"; }
+  function toneColor(tone) { return tone === "b" ? PALETTE.b : PALETTE.a; }
+
+  function nextNo() { return String(++sectionNo).padStart(2, "0"); }
+
+  function sectionBlock(no, heading, standfirst, inner) {
+    return `
+      <section class="block">
+        <div class="sec-head">
+          <div class="sec-num">${escapeHtml(no)}</div>
+          <div>
+            <h2>${escapeHtml(heading)}</h2>
+            ${standfirst ? `<p>${escapeHtml(standfirst)}</p>` : ""}
+          </div>
+        </div>
+        ${inner}
+      </section>`;
+  }
+
+  function renderStats(stats) {
+    if (!Array.isArray(stats) || !stats.length) { statsEl.hidden = true; return; }
+    statsEl.innerHTML = stats.map(s => `
+      <div class="stat"><b>${escapeHtml(s.value)}</b><span>${escapeHtml(s.label)}</span></div>
+    `).join("");
+    statsEl.hidden = false;
+  }
+
+  function renderMeta(data) {
+    const mode = data.mode || "unknown";
+    const modeClass = mode === "curated" ? "curated" : (mode === "offline" ? "offline" : "live");
+    metaEl.innerHTML = `
+      <span class="pill ${modeClass}">${escapeHtml(mode)}</span>
+      <span>${escapeHtml(data.generated_at || "")}</span>
+      <span>${escapeHtml(data.subtitle || "")}</span>
+    `;
+    metaEl.hidden = false;
+  }
+
+  function renderCards(cards) {
+    if (!Array.isArray(cards) || !cards.length) return "";
+    const inner = cards.map(c => `
+      <article class="panel ${toneClass(c.tone)}">
+        <span class="tag ${toneClass(c.tone)}">${escapeHtml(c.tag || "Source")}</span>
+        <h3>${escapeHtml(c.title || "")}</h3>
+        ${c.lede ? `<p class="lede">${escapeHtml(c.lede)}</p>` : ""}
+        ${Array.isArray(c.points) && c.points.length ? `
+          <ul class="checks">${c.points.map(p => `<li>${escapeHtml(p)}</li>`).join("")}</ul>` : ""}
+      </article>`).join("");
+    return sectionBlock(nextNo(), "At a glance", "The essentials before the detail.", `<div class="grid-2">${inner}</div>`);
+  }
+
+  function renderTable(table) {
+    if (!table || !Array.isArray(table.rows) || !table.rows.length) return "";
+    const columns = Array.isArray(table.columns) ? table.columns : [];
+    const head = `<th>${escapeHtml(table.label_header || "")}</th>` +
+      columns.map(c => `<th>${escapeHtml(c)}</th>`).join("");
+    const rows = table.rows.map(r => `
+      <tr>
+        <td class="row-label">${escapeHtml(r.label || "")}</td>
+        ${(r.values || []).map(v => `<td>${escapeHtml(v)}</td>`).join("")}
+      </tr>`).join("");
+    return `
+      <div class="table-wrap">
+        <table>
+          <thead><tr>${head}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      ${table.caption ? `<div class="table-caption">${escapeHtml(table.caption)}</div>` : ""}`;
+  }
+
+  function renderChart(chart) {
+    if (!chart || !Array.isArray(chart.series) || !chart.series.length) return "";
+    const W = 640, H = 220, padL = 150, padR = 40, padT = 30, padB = 40;
+    const plotW = W - padL - padR;
+    const max = Math.max(...chart.series.map(s => Number(s.value) || 0), 1);
+    const barH = 38, gap = 26;
+    let y = padT + 10;
+    let grid = "", bars = "";
+
+    for (let g = 0; g <= max; g += 2) {
+      const x = padL + plotW * (g / max);
+      grid += `<line x1="${x}" y1="${padT}" x2="${x}" y2="${H - padB}" stroke="${PALETTE.grid}" stroke-width="1"/>`;
+      grid += `<text x="${x}" y="${H - padB + 20}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="${PALETTE.muted}">$${g}</text>`;
+    }
+
+    chart.series.forEach(s => {
+      const value = Number(s.value) || 0;
+      const w = plotW * (value / max);
+      const color = toneColor(s.tone);
+      bars += `<text x="${padL - 14}" y="${y + barH / 2 + 6}" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="14" fill="${PALETTE.ink}">${escapeHtml(s.label)}</text>`;
+      bars += `<rect x="${padL}" y="${y}" width="${w}" height="${barH}" rx="6" fill="${color}"/>`;
+      if (w > 170) {
+        bars += `<text x="${padL + w - 12}" y="${y + barH / 2 + 6}" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="14" font-weight="700" fill="#ffffff">$${value.toFixed(2)}</text>`;
+      } else {
+        bars += `<text x="${padL + w + 12}" y="${y + barH / 2 + 6}" font-family="JetBrains Mono, monospace" font-size="14" font-weight="700" fill="${color}">$${value.toFixed(2)}</text>`;
+      }
+      y += barH + gap;
+    });
+
+    return `
+      <figure class="chart">
+        <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${escapeHtml(chart.caption || "chart")}">
+          <title>${escapeHtml(chart.caption || "Chart")}</title>
+          <desc>${escapeHtml(chart.series.map(s => `${s.label}: $${Number(s.value).toFixed(2)}`).join(", "))}</desc>
+          ${grid}${bars}
+          <text x="${padL}" y="${H - 6}" font-family="JetBrains Mono, monospace" font-size="11" fill="${PALETTE.muted}">${escapeHtml(chart.unit || "")}</text>
+        </svg>
+        ${chart.caption ? `<figcaption>${escapeHtml(chart.caption)}</figcaption>` : ""}
+      </figure>`;
+  }
+
+  function renderCalculator(calc) {
+    if (!calc || !calc.enabled) return "";
+    const min = calc.min || 1000, max = calc.max || 1000000, step = calc.step || 1000;
+    const def = calc.default || 10000;
+    return `
+      <div class="calc">
+        <div class="calc-form">
+          <label for="volume">${escapeHtml(calc.label || "Monthly volume")} <output id="volume-out">${Number(def).toLocaleString()}</output></label>
+          <input type="range" id="volume" min="${min}" max="${max}" step="${step}" value="${def}">
+          <button class="btn" id="calc-btn" type="button">Estimate cost →</button>
+        </div>
+        <div class="calc-result" id="calc-result" aria-live="polite">
+          <p class="calc-placeholder">Move the slider and hit estimate. The calculation runs on the backend at <code>POST /api/compare</code>.</p>
+        </div>
+      </div>`;
+  }
+
+  function bindCalculator() {
+    const slider = document.getElementById("volume");
+    const out = document.getElementById("volume-out");
+    const btn = document.getElementById("calc-btn");
+    if (!slider || !btn) return;
+    slider.addEventListener("input", () => {
+      out.textContent = Number(slider.value).toLocaleString();
+    });
+    btn.addEventListener("click", async () => {
+      const volume = Number(slider.value);
+      const target = document.getElementById("calc-result");
+      target.innerHTML = '<p class="calc-placeholder">Calculating on the backend…</p>';
+      try {
+        const res = await fetch("/api/compare", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ volume })
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const d = await res.json();
+        target.innerHTML = `
+          <div class="calc-grid">
+            <div class="calc-card serper"><span>Serper</span><b>$${Number(d.serper).toLocaleString(undefined, { maximumFractionDigits: 2 })}</b></div>
+            <div class="calc-card tavily"><span>Tavily</span><b>$${Number(d.tavily).toLocaleString(undefined, { maximumFractionDigits: 2 })}</b></div>
+            <div class="calc-card gap"><span>Serper saves</span><b>${d.gap}×</b></div>
+          </div>
+          <p class="calc-note">${escapeHtml(d.note || "")}</p>`;
+      } catch (err) {
+        target.innerHTML = '<p class="calc-error">Backend unavailable. Start <code>app.py</code> and try again.</p>';
+      }
+    });
+  }
+
+  function renderPicks(picks) {
+    if (!Array.isArray(picks) || !picks.length) return "";
+    return picks.map(group => {
+      const items = Array.isArray(group.items) ? group.items : [];
+      const inner = items.map((p, i) => `
+        <article class="pick ${toneClass(group.tone)}">
+          <span class="k">${String(i + 1).padStart(2, "0")}</span>
+          <h4>${escapeHtml(p.title || "")}</h4>
+          <p>${escapeHtml(p.body || "")}</p>
+        </article>`).join("");
+      return sectionBlock(nextNo(), group.heading || "Recommendations", "", `<div class="grid-4">${inner}</div>`);
+    }).join("");
+  }
+
+  function renderWarnings(warnings) {
+    if (!Array.isArray(warnings) || !warnings.length) return "";
+    const inner = warnings.map(w => `
+      <div class="warn">
+        <h4>${escapeHtml(w.title || "Trade-off")}</h4>
+        <p>${escapeHtml(w.body || "")}</p>
+      </div>`).join("");
+    return sectionBlock(nextNo(), "Where it is weaker", "The costs the marketing page does not lead with.", `<div class="grid-2">${inner}</div>`);
+  }
+
+  function renderSections(sections) {
+    if (!Array.isArray(sections) || !sections.length) return "";
+    const inner = sections.map(s => `
+      <h3>${escapeHtml(s.heading || "")}</h3>
+      ${formatBody(s.body || "")}`).join("");
+    return sectionBlock(nextNo(), "Findings", "What the retrieved sources actually say.", `<div class="prose">${inner}</div>`);
+  }
+
+  function renderSources(sources) {
+    if (!Array.isArray(sources) || !sources.length) return "";
+    const inner = sources.map((s, i) => {
+      const url = s.url ? escapeHtml(s.url) : "";
+      const tag = s.url ? "a" : "div";
+      const attrs = s.url ? ` href="${url}" target="_blank" rel="noopener"` : "";
+      return `<${tag} class="source"${attrs}>
+        <div class="idx">${String(i + 1).padStart(2, "0")}</div>
+        <div>
+          <b>${escapeHtml(s.title || "Untitled source")}</b>
+          ${s.snippet ? `<span>${escapeHtml(s.snippet)}</span>` : ""}
+          ${url ? `<div class="url">${url}</div>` : ""}
+        </div>
+      </${tag}>`;
+    }).join("");
+    return sectionBlock(nextNo(), "Sources", "Follow the evidence, not just the summary.", `<div class="sources">${inner}</div>`);
+  }
+
+  function renderReport(data) {
+    sectionNo = 0;
+
+    titleEl.innerHTML = renderTitle(data.title || data.query || "Research brief");
+    summaryEl.textContent = data.summary || "";
+    welcomeEl.hidden = true;
+    renderStats(data.stats);
+    renderMeta(data);
+
+    let html = "";
+    html += renderCards(data.cards);
+
+    const dataInner = renderTable(data.table) + renderChart(data.chart) + renderCalculator(data.calculator);
+    if (dataInner) {
+      html += sectionBlock(nextNo(), "The data", "Numbers, estimates and charts returned by the backend.", dataInner);
+    }
+
+    html += renderPicks(data.picks);
+    html += renderWarnings(data.warnings);
+    html += renderSections(data.sections);
+    html += renderSources(data.sources);
+
+    if (data.disclaimer) {
+      html += `<div class="disclaimer">${escapeHtml(data.disclaimer)}</div>`;
+    }
+
+    reportEl.innerHTML = html;
+    bindCalculator();
+
+    document.title = (data.title || "Research Dossier") + " — Research Dossier";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function showLoading(query) {
+    welcomeEl.hidden = true;
+    statsEl.hidden = true;
+    metaEl.hidden = true;
+    titleEl.textContent = "Researching “" + query + "”…";
+    summaryEl.textContent = "Retrieving sources and assembling the structured brief.";
+    reportEl.innerHTML = `
+      <div class="loading" aria-live="polite">
+        <div class="sk w60"></div>
+        <div class="sk w40"></div>
+        <div class="sk tall"></div>
+      </div>`;
+  }
+
+  function showError(message) {
+    titleEl.textContent = "Something went wrong";
+    summaryEl.textContent = "The backend did not return a report.";
+    reportEl.innerHTML = `<div class="error"><strong>Error:</strong> ${escapeHtml(message)}</div>`;
+  }
+
+  async function research(query) {
+    const q = (query || "").trim();
+    if (!q) return;
+    input.value = q;
+    button.disabled = true;
+    showLoading(q);
+    try {
+      const res = await fetch("/api/research", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+      renderReport(data);
+      history.replaceState(null, "", "?q=" + encodeURIComponent(q));
+    } catch (err) {
+      showError(err.message || "request failed");
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    research(input.value);
+  });
+
+  document.getElementById("chips").addEventListener("click", event => {
+    const chip = event.target.closest(".chip");
+    if (chip) research(chip.textContent.trim());
+  });
+
+  async function checkHealth() {
+    try {
+      const res = await fetch("/api/health", { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      document.getElementById("status-dot").classList.add("ok");
+      document.getElementById("status-text").textContent =
+        "backend connected · " + (data.tavily ? "tavily" : "wikipedia");
+    } catch (err) {
+      document.getElementById("status-dot").classList.remove("ok");
+      document.getElementById("status-text").textContent = "backend offline";
+    }
+  }
+
+  checkHealth();
+
+  const params = new URLSearchParams(window.location.search);
+  const initial = params.get("q");
+  if (initial) research(initial);
+</script>
+
+</body>
+</html>

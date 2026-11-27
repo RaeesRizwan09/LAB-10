@@ -1,0 +1,106 @@
+[
+  {
+    "id": "serper-vs-tavily",
+    "match": ["serper", "tavily"],
+    "title": "Serper vs Tavily",
+    "subtitle": "AI Search API comparison · 2026",
+    "summary": "Two AI search APIs, one decision. Serper sells cheap Google SERP JSON; Tavily sells LLM-ready page content and synthesis. Here is the evidence from the Lab 10 research run, side by side.",
+    "stats": [
+      { "value": "5–26.7×", "label": "Serper cheaper per search" },
+      { "value": "$0.30–$1", "label": "Serper per 1,000" },
+      { "value": "1,000", "label": "Tavily free credits / mo" },
+      { "value": "2", "label": "Agents in the crew" }
+    ],
+    "cards": [
+      {
+        "tone": "a",
+        "tag": "SERP API",
+        "title": "Buy the SERP, skip the extraction.",
+        "lede": "The cheapest way to get Google's results page back as structured JSON.",
+        "points": [
+          "Organic results, knowledge graph, People Also Ask, related searches",
+          "News, Maps, Shopping and Scholar verticals",
+          "Country and language targeting built in"
+        ]
+      },
+      {
+        "tone": "b",
+        "tag": "RAG API",
+        "title": "Buy the reading, not just the links.",
+        "lede": "Returns page content and a synthesized answer an agent can use immediately.",
+        "points": [
+          "Snippet chunks plus raw page content in one request",
+          "Generated answers and follow-up questions",
+          "Mature LangChain and LlamaIndex integrations"
+        ]
+      }
+    ],
+    "table": {
+      "caption": "Monthly cost, pay-as-you-go",
+      "label_header": "Searches / month",
+      "columns": ["Serper", "Tavily", "Gap"],
+      "rows": [
+        { "label": "1,000", "values": ["$1.00", "$8.00", "8×"] },
+        { "label": "10,000", "values": ["$10.00", "$80.00", "8×"] },
+        { "label": "100,000", "values": ["$100.00", "$800.00", "8×"] },
+        { "label": "1,000,000", "values": ["$300.00", "$8,000.00", "26.7×"] }
+      ]
+    },
+    "chart": {
+      "caption": "Fig. 1 — Cost per 1,000 searches. Bars are drawn from the backend dataset.",
+      "unit": "USD per 1,000 searches",
+      "series": [
+        { "label": "Serper", "value": 1.0, "tone": "a" },
+        { "label": "Tavily", "value": 8.0, "tone": "b" }
+      ]
+    },
+    "calculator": {
+      "enabled": true,
+      "label": "Monthly searches",
+      "min": 1000,
+      "max": 1000000,
+      "step": 1000,
+      "default": 10000
+    },
+    "picks": [
+      {
+        "heading": "Pick Serper when…",
+        "tone": "a",
+        "items": [
+          { "title": "You want Google results as JSON for far less", "body": "Serper runs $0.30–$1.00 per 1,000 searches against Tavily's $8.00 pay-as-you-go." },
+          { "title": "You need SERP features", "body": "Knowledge graph, People Also Ask, related searches and organic results come back structured." },
+          { "title": "You need other Google verticals", "body": "News, Maps, Shopping and Scholar, with country and language targeting built in." },
+          { "title": "You already fetch and parse pages", "body": "If you only need snippets, or you run your own scraper, Serper's SERP-only output is enough." }
+        ]
+      },
+      {
+        "heading": "Pick Tavily when…",
+        "tone": "b",
+        "items": [
+          { "title": "An LLM or RAG pipeline reads the results", "body": "Page content and an answer arrive in the same request, so the agent can act immediately." },
+          { "title": "You want RAG helpers", "body": "Answer synthesis and follow-up questions are built in, not bolted on." },
+          { "title": "You use LlamaIndex", "body": "Tavily has the mature LlamaIndex and LangChain integrations for agent grounding." },
+          { "title": "Your volume is small and steady", "body": "1,000 free credits a month covers light research workloads with no card required." }
+        ]
+      }
+    ],
+    "warnings": [
+      { "title": "Serper's weak spot", "body": "Page content lives on a separate Webpage endpoint with no public price, and credits expire after six months." },
+      { "title": "Tavily's weak spot", "body": "Costs 5–26.7× more per basic search, and advanced depth doubles the price." }
+    ],
+    "sections": [
+      {
+        "heading": "The decision, in three questions",
+        "body": "Start from what the agent needs to do with the result, not from the price list. If the agent needs page content and an answer, choose Tavily. If it needs Google SERP features or the lowest cost, choose Serper. If neither applies, both work with LangChain — pick by budget and integration fit."
+      }
+    ],
+    "sources": [
+      {
+        "title": "CrewAI Lab 10 notebook — research run",
+        "url": "",
+        "snippet": "Source data for the pricing table, feature matrix and agent setup."
+      }
+    ],
+    "disclaimer": "Curated from the Lab 10 notebook research run. Verify pricing before committing to a plan."
+  }
+]
