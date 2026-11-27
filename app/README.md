@@ -4,13 +4,15 @@ A small, dependency-free web app built from the **Lab 10 CrewAI** notebook. Type
 topic or a head-to-head comparison; the Python backend retrieves sources and returns a
 **structured JSON report** that the frontend renders as cards, tables, charts and citations.
 
-Nothing is hardcoded in the page. The topic lives in the query.
+Nothing is hardcoded in the page. The topic lives in the query. **Tavily is the only live
+search provider** — there is no Wikipedia or other fallback.
 
 ## Run
 
 ```bash
 cd lab10-app
-python3 app.py            # http://localhost:8000
+export TAVILY_API_KEY="tvly-…"   # or put it in app/.env
+python3 app.py                   # http://localhost:8000
 # or: python3 app.py 8080
 ```
 
@@ -22,14 +24,35 @@ Only the Python standard library is required.
 browser ──POST /api/research {query}──▶ app.py
                                         │
                                         ├─ 1. curated corpus match (corpus.json)
-                                        ├─ 2. Tavily Search (if TAVILY_API_KEY is set)
-                                        └─ 3. Wikipedia search + page summaries (default)
+                                        │      └─ hit  → local report, no network call
+                                        │
+                                        └─ 2. Tavily Search  (the only live provider)
+                                               ├─ key set      → live results
+                                               ├─ key missing  → "Tavily key required"
+                                               └─ no results   → "No Tavily results"
                                         │
 browser ◀──── structured JSON ──────────┘
 ```
 
 The frontend renders only the blocks present in the response, so a new topic needs no
-frontend change — add a corpus entry or a retrieval source.
+frontend change — add a corpus entry or a working Tavily key.
+
+### Tavily request
+
+```python
+POST https://api.tavily.com/search
+{
+  "api_key":            "tvly-…",
+  "query":              "<user query>",
+  "search_depth":       "advanced",
+  "max_results":        5,
+  "include_answer":     True,
+  "include_raw_content": True
+}
+```
+
+`include_raw_content` returns page content, which is the closest Tavily gets to crawling.
+Tavily is a search API, not a general-purpose crawler: it does not spider arbitrary sites.
 
 ## API
 
@@ -50,7 +73,7 @@ Every field except `query`, `mode`, `generated_at` and `title` is optional:
 ```json
 {
   "query": "Serper vs Tavily",
-  "mode": "curated | tavily | wikipedia | offline",
+  "mode": "curated | tavily | offline",
   "generated_at": "2026-11-27 10:14 UTC",
   "title": "Serper vs Tavily",
   "subtitle": "AI Search API comparison · 2026",
@@ -88,7 +111,7 @@ Cost estimate used by the calculator:
 ### `GET /api/health`
 
 ```json
-{ "status": "ok", "service": "lab10-research-dossier", "tavily": false, "corpus": 1 }
+{ "status": "ok", "service": "lab10-research-dossier", "provider": "tavily", "tavily": false, "corpus": 1 }
 ```
 
 ## Adding a topic without code
@@ -110,27 +133,39 @@ returned before live retrieval.
 ]
 ```
 
-## Optional: live web search with Tavily
+## Live web search with Tavily (required)
+
+Tavily is the only live search provider. Set the key in the environment or in
+`app/.env`:
 
 ```bash
 export TAVILY_API_KEY="tvly-…"
 python3 app.py
 ```
 
-When the key is set, queries that miss the corpus go through Tavily Search first. Without
-it, the backend falls back to Wikipedia (no key required).
+```
+# app/.env
+TAVILY_API_KEY=tvly-…
+```
+
+Queries that miss the curated corpus go through Tavily Search. If the key is missing,
+the backend returns a structured **“Tavily key required”** report — it does not fall back
+to Wikipedia or any other provider. If Tavily returns nothing, it returns a structured
+**“No Tavily results”** report.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `app.py` | HTTP server, retrieval, report builders, cost model |
+| `app.py` | HTTP server, Tavily retrieval, report builders, cost model |
 | `index.html` | Query-driven frontend (renders the JSON blocks) |
 | `corpus.json` | Curated reports (e.g. the Lab 10 Serper vs Tavily comparison) |
+| `.env.example` | Template for `TAVILY_API_KEY` (copy to `.env`) |
 
 ## Notes
 
 - The Serper/Tavily figures are curated from the Lab 10 notebook research run. Verify
   pricing before committing to a plan.
-- Wikipedia summaries can be incomplete or dated; the response includes a disclaimer.
+- Live summaries come from Tavily and may be incomplete; the response includes a
+  disclaimer. Tavily is a search API, not a general crawler.
 - The app binds the frontend to the backend over `fetch`; no build step, no framework.

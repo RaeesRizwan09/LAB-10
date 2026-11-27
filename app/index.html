@@ -321,7 +321,7 @@
 
     <div class="welcome" id="welcome">
       <div class="step"><div class="n">01 / QUERY</div><h3>Ask anything</h3><p>One topic, or two things compared with “vs”. No topic is baked into the page.</p></div>
-      <div class="step"><div class="n">02 / RETRIEVE</div><h3>Backend gathers sources</h3><p>A curated corpus is checked first, then live Tavily or Wikipedia retrieval.</p></div>
+      <div class="step"><div class="n">02 / RETRIEVE</div><h3>Backend gathers sources</h3><p>A curated corpus is checked first, then live Tavily search is the only retrieval provider.</p></div>
       <div class="step"><div class="n">03 / RENDER</div><h3>Structured JSON → page</h3><p>The API returns typed fields; the frontend renders cards, tables, charts and citations.</p></div>
     </div>
   </section>
@@ -580,12 +580,18 @@
     return sectionBlock(nextNo(), "Where it is weaker", "The costs the marketing page does not lead with.", `<div class="grid-2">${inner}</div>`);
   }
 
-  function renderSections(sections) {
+  function renderSections(sections, mode) {
     if (!Array.isArray(sections) || !sections.length) return "";
     const inner = sections.map(s => `
       <h3>${escapeHtml(s.heading || "")}</h3>
       ${formatBody(s.body || "")}`).join("");
-    return sectionBlock(nextNo(), "Findings", "What the retrieved sources actually say.", `<div class="prose">${inner}</div>`);
+    const offline = mode === "offline";
+    return sectionBlock(
+      nextNo(),
+      offline ? "Next steps" : "Findings",
+      offline ? "What to do to get live results for this query." : "What the retrieved sources actually say.",
+      `<div class="prose">${inner}</div>`
+    );
   }
 
   function renderSources(sources) {
@@ -625,7 +631,7 @@
 
     html += renderPicks(data.picks);
     html += renderWarnings(data.warnings);
-    html += renderSections(data.sections);
+    html += renderSections(data.sections, data.mode);
     html += renderSources(data.sources);
 
     if (data.disclaimer) {
@@ -699,7 +705,7 @@
       const data = await res.json();
       document.getElementById("status-dot").classList.add("ok");
       document.getElementById("status-text").textContent =
-        "backend connected · " + (data.tavily ? "tavily" : "wikipedia");
+        "backend connected · " + (data.tavily ? "tavily" : "tavily key missing");
     } catch (err) {
       document.getElementById("status-dot").classList.remove("ok");
       document.getElementById("status-text").textContent = "backend offline";

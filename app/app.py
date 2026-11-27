@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
-"""Lab 10 — query-driven research dossier.
+"""Lab 10 — query-driven research dossier (Tavily-only retrieval).
 
 A dependency-free backend (Python standard library only) that turns a free-form
 query into a structured report the frontend can render.
 
-Pipeline
---------
-1. Look for a matching curated document in corpus.json (e.g. the Lab 10
-   Serper vs Tavily comparison).
-2. Otherwise retrieve live sources:
-     * Tavily Search if TAVILY_API_KEY is set
-     * Wikipedia (search + page summaries) as the keyless default
-3. Return one JSON schema: title, summary, stats, cards, table, chart,
-   calculator, picks, warnings, sections, sources, disclaimer.
+Retrieval policy
+----------------
+* Curated corpus match (corpus.json)  -> local report, no network call.
+* Everything else                     -> Tavily Search. Tavily is the ONLY
+  live search provider. There is no Wikipedia (or other) fallback.
+* No TAVILY_API_KEY                   -> a structured "key required" report.
+
+Tavily is called with:
+    search_depth       = "advanced"
+    include_answer     = True
+    include_raw_content= True   (page content, the closest thing to a crawl)
+    max_results        = 5
 
 Routes
 ------
@@ -27,7 +30,6 @@ Then open http://localhost:8000
 """
 
 import datetime
-import html
 import json
 import os
 import re
@@ -38,8 +40,8 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CORPUS_PATH = os.path.join(BASE_DIR, "corpus.json")
+ENV_PATH = os.path.join(BASE_DIR, ".env")
 USER_AGENT = "Lab10ResearchDossier/1.0 (educational; local)"
-TAVILY_KEY = os.environ.get("TAVILY_API_KEY", "").strip()
 
 MAX_QUERY = 300
 COMPARE_RE = re.compile(
@@ -48,8 +50,30 @@ COMPARE_RE = re.compile(
 
 
 # ---------------------------------------------------------------------------
-# Utilities
+# Configuration
 # ---------------------------------------------------------------------------
+def load_dotenv():
+    """Minimal .env loader (no dependency). Existing env vars win."""
+    if not os.path.exists(ENV_PATH):
+        return
+    try:
+        with open(ENV_PATH, "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                os.environ.setdefault(
+                    key.strip(), value.strip().strip('"').strip("'")
+                )
+    except OSError as exc:
+        print("Could not read .env:", exc)
+
+
+load_dotenv()
+TAVILY_KEY = os.environ.get("TAVILY_API_KEY", "").strip()
+
+
 def load_corpus():
     try:
         with open(CORPUS_PATH, "r", encoding="utf-8") as fh:
@@ -62,16 +86,15 @@ def load_corpus():
 CORPUS = load_corpus()
 
 
+# ---------------------------------------------------------------------------
+# Utilities
+# ---------------------------------------------------------------------------
 def now_iso():
     return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
 
 def tokens(text):
     return set(re.findall(r"[a-z0-9]+", (text or "").lower()))
-
-
-def strip_html(text):
-    return html.unescape(re.sub(r"<[^>]+>", "", text or "")).strip()
 
 
 def sentences(text, limit=3):
@@ -88,7 +111,7 @@ def clean_entity(text):
     return re.sub(r"[\s,;:.!?]+$", "", text.strip()).strip()
 
 
-def http_json(url, data=None, headers=None, timeout=12):
+def http_json(url, data=None, headers=None, timeout=20):
     req = urllib.request.Request(
         url, data=data, headers={"User-Agent": USER_AGENT, **(headers or {})}
     )
@@ -97,7 +120,7 @@ def http_json(url, data=None, headers=None, timeout=12):
 
 
 # ---------------------------------------------------------------------------
-# Retrieval: curated corpus
+# Retrieval: curated corpus (local, no network)
 # ---------------------------------------------------------------------------
 def find_curated(query):
     q = tokens(query)
@@ -111,63 +134,13 @@ def find_curated(query):
 
 
 # ---------------------------------------------------------------------------
-# Retrieval: Wikipedia (keyless default)
-# ---------------------------------------------------------------------------
-def wiki_search(query, limit=5):
-    params = urllib.parse.urlencode(
-        {
-            "action": "query",
-            "list": "search",
-            "srsearch": query,
-            "format": "json",
-            "srlimit": limit,
-            "srprop": "snippet",
-        }
-    )
-    data = http_json("https://en.wikipedia.org/w/api.php?" + params)
-    results = []
-    for item in data.get("query", {}).get("search", []):
-        results.append(
-            {"title": item.get("title", ""), "snippet": strip_html(item.get("snippet", ""))}
-        )
-    return results
-
-
-def wiki_summary(title):
-    url = "https://en.wikipedia.org/api/rest_v1/page/summary/" + urllib.parse.quote(
-        title.replace(" ", "_"), safe=""
-    )
-    try:
-        data = http_json(url)
-    except Exception:
-        return None
-    extract = (data.get("extract") or "").strip()
-    if not extract:
-        return None
-    page = (
-        (data.get("content_urls") or {}).get("desktop") or {}
-    ).get("page", "")
-    return {
-        "title": data.get("title", title),
-        "extract": extract,
-        "description": (data.get("description") or "").strip(),
-        "url": page,
-    }
-
-
-def wiki_lookup(name):
-    results = wiki_search(name, 1)
-    if results:
-        page = wiki_summary(results[0]["title"])
-        if page:
-            return page
-    return wiki_summary(name)
-
-
-# ---------------------------------------------------------------------------
-# Retrieval: Tavily (optional, needs TAVILY_API_KEY)
+# Retrieval: Tavily (the only live provider)
 # ---------------------------------------------------------------------------
 def tavily_search(query, limit=5):
+    """Return {'answer': str, 'results': [...]} or None.
+
+    This is the only network retrieval path in the app.
+    """
     if not TAVILY_KEY:
         return None
     payload = json.dumps(
@@ -177,6 +150,7 @@ def tavily_search(query, limit=5):
             "search_depth": "advanced",
             "max_results": limit,
             "include_answer": True,
+            "include_raw_content": True,
         }
     ).encode("utf-8")
     try:
@@ -184,29 +158,31 @@ def tavily_search(query, limit=5):
             "https://api.tavily.com/search",
             data=payload,
             headers={"Content-Type": "application/json"},
-            timeout=25,
+            timeout=30,
         )
     except Exception as exc:
         print("Tavily request failed:", exc)
         return None
-    return {
-        "answer": (data.get("answer") or "").strip(),
-        "results": [
+
+    results = []
+    for item in data.get("results", []):
+        results.append(
             {
-                "title": r.get("title") or "Untitled",
-                "url": r.get("url") or "",
-                "content": (r.get("content") or "").strip(),
+                "title": item.get("title") or "Untitled",
+                "url": item.get("url") or "",
+                "content": (item.get("content") or "").strip(),
+                "raw": (item.get("raw_content") or "").strip(),
+                "score": item.get("score"),
             }
-            for r in data.get("results", [])
-        ],
-    }
+        )
+    return {"answer": (data.get("answer") or "").strip(), "results": results}
 
 
 # ---------------------------------------------------------------------------
 # Report builders
 # ---------------------------------------------------------------------------
 def build_from_curated(query, doc):
-    report = {
+    return {
         "query": query,
         "mode": "curated",
         "generated_at": now_iso(),
@@ -224,47 +200,65 @@ def build_from_curated(query, doc):
         "sources": doc.get("sources", []),
         "disclaimer": doc.get("disclaimer", ""),
     }
-    return report
+
+
+def _text_for(result):
+    """Prefer page content, fall back to the snippet."""
+    return (result.get("raw") or result.get("content") or "").strip()
 
 
 def build_from_tavily(query, data):
-    results = data.get("results", [])
-    if not results and not data.get("answer"):
+    results = data.get("results") or []
+    answer = (data.get("answer") or "").strip()
+    if not results and not answer:
         return None
-    sources = [
-        {
-            "title": r["title"],
-            "url": r["url"],
-            "snippet": first_sentences(r["content"], 1),
-        }
-        for r in results
-    ]
-    sections = [
-        {"heading": r["title"], "body": r["content"] or "No snippet returned."}
-        for r in results
-    ]
+
+    sources = []
+    for result in results:
+        sources.append(
+            {
+                "title": result["title"],
+                "url": result["url"],
+                "snippet": first_sentences(
+                    result.get("content") or _text_for(result), 1
+                ),
+            }
+        )
+
+    sections = []
+    for result in results:
+        body = _text_for(result)
+        sections.append(
+            {
+                "heading": result["title"],
+                "body": (body[:5000] if body else "No page content returned."),
+            }
+        )
+
     cards = []
-    if len(results) >= 2:
-        for idx, r in enumerate(results[:2]):
-            cards.append(
-                {
-                    "tone": "a" if idx == 0 else "b",
-                    "tag": "Source",
-                    "title": r["title"],
-                    "lede": first_sentences(r["content"], 1) or "No summary available.",
-                    "points": sentences(r["content"], 3),
-                }
-            )
+    for idx, result in enumerate(results[:2]):
+        text = _text_for(result)
+        cards.append(
+            {
+                "tone": "a" if idx == 0 else "b",
+                "tag": "Source",
+                "title": result["title"],
+                "lede": first_sentences(text, 1) or "No summary available.",
+                "points": sentences(text, 3),
+            }
+        )
+
     return {
         "query": query,
         "mode": "tavily",
         "generated_at": now_iso(),
         "title": query.strip().title(),
-        "subtitle": "Research brief · live web sources",
-        "summary": data.get("answer") or (sections[0]["body"] if sections else ""),
+        "subtitle": "Research brief · live Tavily results",
+        "summary": answer
+        or first_sentences(_text_for(results[0]) if results else "", 2),
         "stats": [
-            {"value": str(len(sources)), "label": "sources"},
-            {"value": "Tavily", "label": "retrieval"},
+            {"value": str(len(sources)), "label": "Tavily results"},
+            {"value": "advanced", "label": "search depth"},
             {"value": "live", "label": "mode"},
         ],
         "cards": cards,
@@ -275,92 +269,113 @@ def build_from_tavily(query, data):
         "warnings": [],
         "sections": sections,
         "sources": sources,
-        "disclaimer": "Summaries come from live web search and may be incomplete. Verify before publishing.",
+        "disclaimer": "Results come from Tavily live search and may be incomplete. Verify before publishing.",
     }
 
 
-def build_comparison(query, a, b):
-    page_a = wiki_lookup(a)
-    page_b = wiki_lookup(b)
-    if not page_a and not page_b:
+def build_comparison_tavily(query, a, b):
+    data_a = tavily_search(a, limit=4)
+    data_b = tavily_search(b, limit=4)
+    if not data_a and not data_b:
         return None
 
     cards = []
-    if page_a:
-        cards.append(
-            {
-                "tone": "a",
-                "tag": "Entity A",
-                "title": page_a["title"],
-                "lede": page_a.get("description") or first_sentences(page_a["extract"], 1),
-                "points": sentences(page_a["extract"], 3),
-            }
-        )
-    if page_b:
-        cards.append(
-            {
-                "tone": "b",
-                "tag": "Entity B",
-                "title": page_b["title"],
-                "lede": page_b.get("description") or first_sentences(page_b["extract"], 1),
-                "points": sentences(page_b["extract"], 3),
-            }
-        )
+    for tone, name, data in (("a", a, data_a), ("b", b, data_b)):
+        if data and data["results"]:
+            top = data["results"][0]
+            text = _text_for(top) or (data.get("answer") or "")
+            cards.append(
+                {
+                    "tone": tone,
+                    "tag": "Entity A" if tone == "a" else "Entity B",
+                    "title": name,
+                    "lede": first_sentences(text, 1) or "No summary returned.",
+                    "points": sentences(text, 3),
+                }
+            )
+        else:
+            cards.append(
+                {
+                    "tone": tone,
+                    "tag": "Entity A" if tone == "a" else "Entity B",
+                    "title": name,
+                    "lede": "No Tavily results for this side.",
+                    "points": [],
+                }
+            )
 
     table = None
-    if page_a and page_b:
+    if (
+        data_a
+        and data_b
+        and data_a["results"]
+        and data_b["results"]
+    ):
+        top_a, top_b = data_a["results"][0], data_b["results"][0]
         table = {
-            "caption": "Side-by-side summary",
+            "caption": "What the web says",
             "label_header": "Criteria",
-            "columns": [page_a["title"], page_b["title"]],
+            "columns": [a, b],
             "rows": [
                 {
-                    "label": "Overview",
-                    "values": [
-                        first_sentences(page_a["extract"], 1),
-                        first_sentences(page_b["extract"], 1),
-                    ],
+                    "label": "Top source",
+                    "values": [top_a["title"], top_b["title"]],
                 },
                 {
-                    "label": "Focus",
+                    "label": "Key point",
                     "values": [
-                        page_a.get("description") or "—",
-                        page_b.get("description") or "—",
+                        first_sentences(_text_for(top_a), 1) or "—",
+                        first_sentences(_text_for(top_b), 1) or "—",
                     ],
                 },
             ],
         }
 
-    sources = []
-    for page in (page_a, page_b):
-        if page:
+    sources, seen = [], set()
+    for data in (data_a, data_b):
+        if not data:
+            continue
+        for result in data["results"][:3]:
+            if result["url"] and result["url"] in seen:
+                continue
+            seen.add(result["url"])
             sources.append(
                 {
-                    "title": page["title"],
-                    "url": page["url"],
-                    "snippet": page.get("description") or first_sentences(page["extract"], 1),
+                    "title": result["title"],
+                    "url": result["url"],
+                    "snippet": first_sentences(
+                        result.get("content") or _text_for(result), 1
+                    ),
                 }
             )
 
-    body = ""
-    if page_a:
-        body += f"**{page_a['title']}** — {first_sentences(page_a['extract'], 3)}\n\n"
-    if page_b:
-        body += f"**{page_b['title']}** — {first_sentences(page_b['extract'], 3)}"
+    answers = [
+        data["answer"]
+        for data in (data_a, data_b)
+        if data and data.get("answer")
+    ]
+    summary = " ".join(answers).strip() or f"Live Tavily results for {a} and {b}."
+
+    sections = []
+    for name, data in ((a, data_a), (b, data_b)):
+        if not data or not data["results"]:
+            continue
+        body = "\n\n".join(
+            f"**{result['title']}** — {first_sentences(_text_for(result), 2)}"
+            for result in data["results"][:3]
+        )
+        sections.append({"heading": f"{name}: what the sources say", "body": body})
 
     return {
         "query": query,
-        "mode": "wikipedia",
+        "mode": "tavily",
         "generated_at": now_iso(),
         "title": f"{a} vs {b}",
-        "subtitle": "Comparison brief · live sources",
-        "summary": (
-            f"A comparison brief for {a} and {b}, grounded in Wikipedia summaries. "
-            "Read the cards for the essentials, then follow the sources for detail."
-        ),
+        "subtitle": "Comparison brief · live Tavily results",
+        "summary": summary,
         "stats": [
-            {"value": str(len(sources)), "label": "sources"},
-            {"value": "Wikipedia", "label": "retrieval"},
+            {"value": str(len(sources)), "label": "Tavily results"},
+            {"value": "2", "label": "entities searched"},
             {"value": "live", "label": "mode"},
         ],
         "cards": cards,
@@ -369,79 +384,27 @@ def build_comparison(query, a, b):
         "calculator": {"enabled": False},
         "picks": [],
         "warnings": [],
-        "sections": [
-            {"heading": "What the sources say", "body": body.strip()},
-            {
-                "heading": "Open questions",
-                "body": (
-                    f"How do {a} and {b} differ on cost, quality and speed? "
-                    "Which one fits the specific workflow and team skill set? "
-                    "What evidence would change the decision?"
-                ),
-            },
-        ],
-        "sources": sources,
-        "disclaimer": "Summaries come from Wikipedia and may be incomplete or dated. Verify before publishing.",
-    }
-
-
-def build_topic(query):
-    results = wiki_search(query, 4)
-    pages = []
-    for result in results[:3]:
-        page = wiki_summary(result["title"])
-        if page:
-            pages.append(page)
-    if not pages:
-        return None
-
-    first = pages[0]
-    sources = [
-        {
-            "title": page["title"],
-            "url": page["url"],
-            "snippet": page.get("description") or first_sentences(page["extract"], 1),
-        }
-        for page in pages
-    ]
-    sections = [{"heading": page["title"], "body": page["extract"]} for page in pages]
-
-    return {
-        "query": query,
-        "mode": "wikipedia",
-        "generated_at": now_iso(),
-        "title": query.strip().title(),
-        "subtitle": "Research brief · live sources",
-        "summary": first_sentences(first["extract"], 2),
-        "stats": [
-            {"value": str(len(pages)), "label": "sources"},
-            {"value": "Wikipedia", "label": "retrieval"},
-            {"value": "live", "label": "mode"},
-        ],
-        "cards": [],
-        "table": None,
-        "chart": None,
-        "calculator": {"enabled": False},
-        "picks": [],
-        "warnings": [],
         "sections": sections,
         "sources": sources,
-        "disclaimer": "Summaries come from Wikipedia and may be incomplete or dated. Verify before publishing.",
+        "disclaimer": "Results come from Tavily live search and may be incomplete. Verify before publishing.",
     }
 
 
-def build_offline(query):
+def build_no_key(query):
     return {
         "query": query,
         "mode": "offline",
         "generated_at": now_iso(),
-        "title": query.strip().title(),
-        "subtitle": "Research outline · no live sources",
-        "summary": "No live sources were reachable for this query, so here is a structured research outline you can fill in.",
+        "title": query.strip().title() or "Untitled query",
+        "subtitle": "Tavily key required",
+        "summary": (
+            "This build uses Tavily as its only live search source. "
+            "TAVILY_API_KEY is not set, so no web retrieval was performed."
+        ),
         "stats": [
             {"value": "0", "label": "sources"},
-            {"value": "outline", "label": "mode"},
-            {"value": "—", "label": "retrieval"},
+            {"value": "Tavily", "label": "provider"},
+            {"value": "no key", "label": "status"},
         ],
         "cards": [],
         "table": None,
@@ -451,27 +414,61 @@ def build_offline(query):
         "warnings": [],
         "sections": [
             {
-                "heading": "Scope",
-                "body": f"Define what “{query}” should cover: the entities involved, the time window, and the decision this research supports.",
+                "heading": "Enable live search",
+                "body": (
+                    "Export TAVILY_API_KEY (or put it in app/.env) and restart app.py. "
+                    "Every non-curated query will then call POST https://api.tavily.com/search "
+                    "with search_depth=advanced and include_raw_content=true."
+                ),
             },
             {
-                "heading": "Key questions",
-                "body": "What are the main options? What criteria matter (cost, quality, speed, integration)? What evidence would change the decision?",
-            },
-            {
-                "heading": "Suggested next steps",
-                "body": "Add a TAVILY_API_KEY for live web search, or run the CrewAI notebook to generate a sourced report.",
+                "heading": "What this query needs",
+                "body": (
+                    f"Once the key is set, “{query}” will be searched on the live web "
+                    "and the top results will be returned as structured cards, sections and citations."
+                ),
             },
         ],
         "sources": [],
-        "disclaimer": "Offline outline only — no external facts were retrieved.",
+        "disclaimer": "No live retrieval was performed. Tavily is the only configured search provider.",
+    }
+
+
+def build_no_results(query):
+    return {
+        "query": query,
+        "mode": "offline",
+        "generated_at": now_iso(),
+        "title": query.strip().title() or "Untitled query",
+        "subtitle": "No Tavily results",
+        "summary": "Tavily returned no usable results for this query.",
+        "stats": [
+            {"value": "0", "label": "sources"},
+            {"value": "Tavily", "label": "provider"},
+            {"value": "no results", "label": "status"},
+        ],
+        "cards": [],
+        "table": None,
+        "chart": None,
+        "calculator": {"enabled": False},
+        "picks": [],
+        "warnings": [],
+        "sections": [
+            {
+                "heading": "Try a narrower query",
+                "body": (
+                    "Tavily works best with specific, well-formed queries. "
+                    "Name the product, paper, company or person directly, then search again."
+                ),
+            }
+        ],
+        "sources": [],
+        "disclaimer": "Tavily is the only configured search provider.",
     }
 
 
 def build_report(query):
     query = (query or "").strip()
-    if not query:
-        return build_offline("Untitled query")
     if len(query) > MAX_QUERY:
         query = query[:MAX_QUERY]
 
@@ -479,31 +476,28 @@ def build_report(query):
     if curated:
         return build_from_curated(query, curated)
 
-    if TAVILY_KEY:
-        tavily = tavily_search(query)
-        if tavily:
-            report = build_from_tavily(query, tavily)
-            if report:
-                return report
+    if not TAVILY_KEY:
+        return build_no_key(query)
 
     match = COMPARE_RE.match(query)
     if match:
-        report = build_comparison(
+        report = build_comparison_tavily(
             query, clean_entity(match.group(1)), clean_entity(match.group(2))
         )
         if report:
             return report
 
-    try:
-        report = build_topic(query)
-    except Exception as exc:
-        print("Live retrieval failed:", exc)
-        report = None
-    return report or build_offline(query)
+    data = tavily_search(query)
+    if data:
+        report = build_from_tavily(query, data)
+        if report:
+            return report
+
+    return build_no_results(query)
 
 
 # ---------------------------------------------------------------------------
-# Cost model for the Serper/Tavily calculator
+# Cost model for the Serper/Tavily calculator (curated report only)
 # ---------------------------------------------------------------------------
 def serper_cost(volume):
     if volume <= 100_000:
@@ -549,6 +543,7 @@ class Handler(SimpleHTTPRequestHandler):
                 {
                     "status": "ok",
                     "service": "lab10-research-dossier",
+                    "provider": "tavily",
                     "tavily": bool(TAVILY_KEY),
                     "corpus": len(CORPUS),
                 }
@@ -562,7 +557,6 @@ class Handler(SimpleHTTPRequestHandler):
             return self._send_json(build_report(query))
 
         if path == "/api/comparison":
-            # Backwards-compatible: return the first curated document.
             return self._send_json(CORPUS[0] if CORPUS else {})
 
         return super().do_GET()
@@ -623,7 +617,8 @@ def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get("PORT", 8000))
     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     print(f"Lab 10 research dossier at http://localhost:{port}")
-    print(f"  corpus: {len(CORPUS)} document(s) · tavily: {'on' if TAVILY_KEY else 'off (Wikipedia fallback)'}")
+    print(f"  provider: Tavily · key: {'set' if TAVILY_KEY else 'MISSING'}")
+    print(f"  corpus: {len(CORPUS)} document(s)")
     print("  POST /api/research  {query}")
     print("  GET  /api/research?q=…")
     print("  POST /api/compare   {volume}")
