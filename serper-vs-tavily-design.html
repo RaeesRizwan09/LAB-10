@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Serper vs Tavily: AI Search API Comparison 2026</title>
+
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --ink: #1a1a2e;
+    --paper: #f8f8f2;
+    --accent: #8b5cf6;
+    --accent-soft: #f5f3ff;
+    --muted: #6b7280;
+    --rule: #e5e7eb;
+    --font-body: "Merriweather", "Georgia", "Times New Roman", serif;
+    --font-head: "Inter", system-ui, -apple-system, sans-serif;
+    --font-mono: "Fira Code", "Consolas", "Courier New", monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    margin: 0;
+    width: 100%;
+    min-height: auto;
+    font-family: var(--font-body);
+    font-size: 11pt;
+    line-height: 1.55;
+    color: var(--ink);
+    background: var(--paper);
+  }
+
+  h1,h2,h3,h4 { font-family: var(--font-head); break-after: avoid; page-break-after: avoid; }
+  p { orphans: 3; widows: 3; margin: 0 0 3mm; }
+  img, svg { max-width: 100%; height: auto; }
+  figure, table, pre, blockquote, .card, .callout, .chart { break-inside: avoid; page-break-inside: avoid; }
+  tr, thead { break-inside: avoid; }
+  thead { display: table-header-group; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  @page { size: A4; margin: 18mm 16mm; }
+
+  .cover {
+    text-align: center;
+    padding: 80mm 20mm 40mm;
+    break-after: page;
+  }
+  .cover h1 {
+    font-size: 36pt;
+    font-weight: 900;
+    letter-spacing: -0.5pt;
+    margin-bottom: 2mm;
+  }
+  .cover .subtitle {
+    font-size: 14pt;
+    color: var(--muted);
+    margin-bottom: 4mm;
+    letter-spacing: 0.5pt;
+  }
+  .cover .topic {
+    font-size: 12pt;
+    color: var(--accent);
+    font-weight: 500;
+    margin-bottom: 6mm;
+    display: inline-block;
+    padding: 4mm 8mm;
+    background: var(--accent-soft);
+    border-radius: 4mm;
+  }
+  .cover .tagline {
+    font-size: 11pt;
+    color: var(--muted);
+    max-width: 600px;
+    margin: 0 auto 2mm;
+    line-height: 1.4;
+  }
+  .cover .source-note {
+    font-size: 9pt;
+    color: #999;
+    margin-top: 2mm;
+  }
+
+  .section {
+    margin-bottom: 10mm;
+  }
+  .section h2 {
+    font-size: 18pt;
+    font-weight: 600;
+    letter-spacing: 0.2pt;
+    margin-bottom: 4mm;
+    padding-bottom: 2mm;
+    border-bottom: 1px solid var(--rule);
+  }
+  .section h3 {
+    font-size: 14pt;
+    font-weight: 500;
+    margin-top: 6mm;
+    margin-bottom: 3mm;
+  }
+
+  .card {
+    background: white;
+    border-radius: 6mm;
+    padding: 5mm 5mm 3mm;
+    margin-bottom: 5mm;
+    box-shadow: 0 0 0 1px var(--rule);
+    break-inside: avoid;
+  }
+  .card .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 3mm;
+  }
+  .card .title {
+    font-size: 12pt;
+    font-weight: 600;
+  }
+  .card .tag {
+    font-size: 8pt;
+    padding: 1mm 3mm;
+    background: var(--accent-soft);
+    border-radius: 3mm;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+  .card .meta {
+    font-size: 9pt;
+    color: var(--muted);
+    margin-top: 1mm;
+  }
+  .card .divider {
+    width: 100%;
+    height: 1px;
+    background: var(--rule);
+    margin: 3mm 0;
+  }
+
+  .feature-list {
+    margin: 0;
+    padding-left: 18mm;
+  }
+  .feature-list li {
+    font-size: 10pt;
+    margin-bottom: 2mm;
+    line-height: 1.4;
+  }
+  .feature-list li::before {
+    content: "▸";
+    color: var(--accent);
+    font-size: 8pt;
+    margin-right: 4mm;
+    width: 1em;
+  }
+
+  .pricing {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 4mm 0;
+    font-size: 10pt;
+  }
+  .pricing th, .pricing td {
+    border: 1px solid var(--rule);
+    padding: 3mm 4mm;
+    text-align: left;
+  }
+  .pricing th {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 9pt;
+  }
+  .pricing tbody tr:nth-child(odd) {
+    background: var(--accent-soft);
+  }
+  .pricing .bad {
+    color: #b91c1c;
+    font-weight: 500;
+  }
+  .pricing .good {
+    color: #056628;
+    font-weight: 500;
+  }
+
+  .usecase {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3mm 8mm;
+    margin-top: 3mm;
+  }
+  .usecase .card {
+    border: none;
+    background: var(--paper);
+    padding: 3mm;
+  }
+  .usecase .badge {
+    font-size: 8pt;
+    padding: 1mm 3mm;
+    border-radius: 3mm;
+    text-transform: uppercase;
+    letter-spacing: 0.3pt;
+    margin-bottom: 2mm;
+  }
+  .usecase .serper { background: #e8f5e9; color: #1b5e20; }
+  .usecase .tavily { background: #e3f2fd; color: #1565c0; }
+
+  .section-num {
+    position: relative;
+    font-size: 40pt;
+    font-weight: 900;
+    color: var(--accent);
+    line-height: 1;
+    float: left;
+    margin-right: 6mm;
+    margin-top: 2mm;
+  }
+  .section-num::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -4pt;
+    width: 100%;
+    height: 2pt;
+    background: var(--accent);
+  }
+
+  .footer {
+    font-size: 8pt;
+    color: #999;
+    margin-top: 12mm;
+    border-top: 1px solid var(--rule);
+    padding-top: 4mm;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>Serper vs Tavily</h1>
+  <div class="subtitle">AI Search API Comparison • 2026</div>
+  <div class="topic">Serper VS Tavily, which one is the best?</div>
+  <div class="tagline">
+    This report investigates the key differences between Serper and Tavily, two leading AI search APIs, covering pricing, features, use cases, and integration options to help you choose the right tool for your workflow.
+  </div>
+  <div class="source-note">Data extracted from CrewAI Lab 10 notebook · Generated 2026</div>
+</div>
+
+<div class="section">
+  <h2><span class="section-num">1</span> Overview</h2>
+  <p>
+    Both Serper and Tavily provide AI-powered search capabilities, but they serve different needs and target different user segments. This report compares them across pricing, features, and recommended use cases, based on the latest 2026 data.
+  </p>
+</div>
+
+<div class="section">
+  <h2><span class="section-num">2</span> Pricing Comparison</h2>
+  <p>
+    Cost is often the deciding factor for individual developers and small teams. Here's how the two services compare at different volumes.
+  </p>
+
+  <table class="pricing">
+    <thead>
+      <tr>
+        <th>Volume / Month</th>
+        <th>Serper (PAYG)</th>
+        <th>Tavily (PAYG)</th>
+        <th>Price Gap</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1,000</td>
+        <td>~$1.00</td>
+        <td>$8.00</td>
+        <td class="good">8× cheaper</td>
+      </tr>
+      <tr>
+        <td>10,000</td>
+        <td>~$10.00</td>
+        <td>$80.00</td>
+        <td class="good">8× cheaper</td>
+      </tr>
+      <tr>
+        <td>100,000</td>
+        <td>~$100.00</td>
+        <td>$800.00</td>
+        <td class="good">8× cheaper</td>
+      </tr>
+      <tr>
+        <td>1,000,000</td>
+        <td>~$300.00</td>
+        <td>$8,000.00</td>
+        <td class="good">26× cheaper</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="callout" style="font-size: 10pt; margin: 4mm 0; padding: 3mm; background: var(--accent-soft); border-radius: 4mm;">
+    <strong>Key takeaway:</strong> Serper costs 5–26.7× less per basic search depending on volume. If your workload is primarily raw SERP queries, Serper is dramatically more cost-effective.
+  </p>
+</div>
+
+<div class="section">
+  <h2><span class="section-num">3</span> Feature Comparison</h2>
+
+  <div class="card">
+    <div class="header">
+      <div class="title">Serper</div>
+      <div class="tag">SERP API</div>
+    </div>
+    <ul class="feature-list">
+      <li>Google results as JSON (organic, knowledge graph, People Also Ask, related searches)</li>
+      <li>Webpage endpoint for full content (separate, pricing after sign-in)</li>
+      <li>Country and language targeting</li>
+      <li>News, Maps, Shopping, Scholar support</li>
+      <li>Faster raw latency</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="header">
+      <div class="title">Tavily</div>
+      <div class="tag">RAG API</div>
+    </div>
+    <ul class="feature-list">
+      <li>Snippet chunks + raw page content in same request</li>
+      <li>Generated answer (LLM-ready synthesis)</li>
+      <li>RAG helpers: answer synthesis & follow-up questions</li>
+      <li>Mature LangChain & LlamaIndex integrations</li>
+      <li>1,000 free credits / month (no card required)</li>
+    </ul>
+  </div>
+
+  <div class="divider" style="margin: 4mm 0;"></div>
+
+  <p>
+    <strong>Serper</strong> leaves page content to a second endpoint with no public price, and its credits expire after 6 months. <strong>Tavily</strong> costs 5–26.7× more per basic search, and advanced depth doubles that price.
+  </p>
+</div>
+
+<div class="section">
+  <h2><span class="section-num">4</span> When to Pick Serper</h2>
+
+  <div class="usecase">
+    <div class="card serper">
+      <div class="badge">Serper</div>
+      <strong>You want Google results as JSON for far less than Tavily charges</strong> (~$0.30–$1.00 per 1,000 vs $8)
+    </div>
+    <div class="card tavily">
+      <div class="badge">Tavily</div>
+      <strong>You need an LLM or RAG pipeline that reads results and wants page content + answer from the same request</strong>
+    </div>
+  </div>
+
+  <div class="usecase">
+    <div class="card serper">
+      <div class="badge">Serper</div>
+      <strong>You need SERP features</strong> (knowledge graph, People Also Ask, related searches, or other Google types: News, Maps, Shopping, Scholar)
+    </div>
+    <div class="card tavily">
+      <div class="badge">Tavily</div>
+      <strong>You use LlamaIndex</strong>, or want Tavily's mature LangChain integration for agent grounding
+    </div>
+  </div>
+
+  <div class="usecase">
+    <div class="card serper">
+      <div class="badge">Serper</div>
+      <strong>You already fetch and parse pages yourself</strong>, or only need snippets
+    </div>
+    <div class="card tavily">
+      <div class="badge">Tavily</div>
+      <strong>Your volume is small and steady</strong> within 1,000 free credits / month
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2><span class="section-num">5</span> When to Pick Tavily</h2>
+
+  <div class="usecase">
+    <div class="card serper">
+      <div class="badge">Serper</div>
+      <strong>Cost is your primary concern</strong>
+    </div>
+    <div class="card tavily">
+      <div class="badge">Tavily</div>
+      <li>Your LLM/RAG pipeline needs page content + synthesized answer in one request</li>
+    </div>
+  </div>
+
+  <div class="usecase">
+    <div class="card serper">
+      <div class="badge">Serper</div>
+      <li>You need raw Google SERP data</li>
+    </div>
+    <div class="card tavily">
+      <div class="badge">Tavily</div>
+      <strong>You use LlamaIndex</strong>, or want mature LangChain integrations
+    </div>
+  </div>
+
+  <div class="usecase">
+    <div class="card serper">
+      <div class="badge">Serper</div>
+      <li>You need News, Maps, Shopping, Scholar support</li>
+    </div>
+    <div class="card tavily">
+      <div class="badge">Tavily</div>
+      <strong>Your volume is small and steady</strong> within 1,000 free credits / month
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2><span class="section-num">6</span> Decision Framework</h2>
+
+  <p>
+    Use this quick guide to choose the right API for your specific needs.
+  </p>
+
+  <div class="card" style="max-width: 500px; margin: 0 auto;">
+    <div class="header">
+      <div class="title">Choose Serper if:</div>
+    </div>
+    <ul class="feature-list">
+      <li>Cost is your primary concern</li>
+      <li>You need raw Google SERP data (organic, knowledge graph, People Also Ask)</li>
+      <li>You need country/language targeting</li>
+      <li>You need News, Maps, Shopping, or Scholar support</li>
+      <li>You have low latency requirements</li>
+    </ul>
+  </div>
+
+  <div class="card" style="max-width: 500px; margin: 8mm auto 0; border-left: 4px solid var(--accent);">
+    <div class="header">
+      <div class="title">Choose Tavily if:</div>
+    </div>
+    <ul class="feature-list">
+      <li>Your LLM/RAG pipeline needs page content + synthesized answer in one request</li>
+      <li>You use LlamaIndex or want mature LangChain integrations</li>
+      <li>Your volume is small enough for 1,000 free credits / month</li>
+      <li>You need generated answers & follow-up question support</li>
+      <li>You want RAG helpers (answer synthesis)</li>
+    </ul>
+  </div>
+</div>
+
+<div class="section">
+  <h2><span class="section-num">7</span> Integration Notes</h2>
+
+  <p>
+    Both APIs integrate with CrewAI and LangChain ecosystems, but their integration maturity differs.
+  </p>
+
+  <div class="card">
+    <strong>Serper integrations:</strong> GoogleSerperAPIWrapper, CrewAI (<code>SerperDevTool</code>), Haystack
+  </div>
+  <div class="card" style="margin-top: 4mm;">
+    <strong>Tavily integrations:</strong> Mature LangChain integration, LlamaIndex integration, CrewAI (<code>Tavily Search Custom Tool</code>)
+  </div>
+
+  <div class="divider" style="margin: 6mm 0;"></div>
+
+  <p class="callout" style="font-size: 10pt; margin: 4mm 0; padding: 3mm; background: var(--accent-soft); border-radius: 4mm;">
+    <strong>Bottom line:</strong> Pick Serper for cheap, broad Google SERP access. Pick Tavily when your agent needs to read web pages, synthesize answers, or leverage RAG pipelines. Many teams use both: Serper for initial discovery, Tavily for deep research from selected results.
+  </p>
+</div>
+
+<div class="footer">
+  © 2026 Serper vs Tavily Comparison · Generated from Lab 10 Notebook · For research purposes
+</div>
+
+</body>
+</html>
